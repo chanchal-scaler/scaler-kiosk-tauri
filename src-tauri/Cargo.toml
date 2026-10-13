@@ -1,0 +1,43 @@
+[package]
+name = "scaler-kiosk-tauri"
+version = "0.1.0"
+description = "Scaler exam kiosk: scaler.com in a locked-down webview"
+authors = ["Scaler"]
+edition = "2021"
+
+[lib]
+name = "scaler_kiosk_tauri_lib"
+crate-type = ["lib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+
+# Native kiosk bits for macOS: NSApplication presentation options (hide Dock/menu bar,
+# block Cmd+Tab / force quit) and the Screen Recording permission preflight.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSResponder"] }
+
+# Linux: WebKitGTK ships with getUserMedia/WebRTC switched off; we turn them on through the
+# raw webview settings (same major version Tauri itself uses).
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

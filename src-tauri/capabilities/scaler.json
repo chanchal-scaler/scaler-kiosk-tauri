@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "scaler-pages",
+  "description": "Pages served from scaler.com may call the kiosk commands (exit after submission, read kiosk info, write to the kiosk log). Nothing else from the Tauri API is exposed to remote content.",
+  "local": false,
+  "remote": {
+    "urls": [
+      "https://scaler.com/*",
+      "https://*.scaler.com/*"
+    ]
+  },
+  "windows": ["main"],
+  "permissions": [
+    "allow-exit-kiosk",
+    "allow-kiosk-info",
+    "allow-kiosk-log"
+  ]
+}

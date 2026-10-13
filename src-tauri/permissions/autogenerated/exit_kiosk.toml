@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-exit-kiosk"
+description = "Enables the exit_kiosk command without any pre-configured scope."
+commands.allow = ["exit_kiosk"]
+
+[[permission]]
+identifier = "deny-exit-kiosk"
+description = "Denies the exit_kiosk command without any pre-configured scope."
+commands.deny = ["exit_kiosk"]

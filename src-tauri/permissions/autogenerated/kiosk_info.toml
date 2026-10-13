@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kiosk-info"
+description = "Enables the kiosk_info command without any pre-configured scope."
+commands.allow = ["kiosk_info"]
+
+[[permission]]
+identifier = "deny-kiosk-info"
+description = "Denies the kiosk_info command without any pre-configured scope."
+commands.deny = ["kiosk_info"]

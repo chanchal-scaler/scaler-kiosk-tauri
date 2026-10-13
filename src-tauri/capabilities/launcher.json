@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "launcher",
+  "description": "The bundled launcher page (tauri://localhost) may use the core API and the kiosk commands.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "allow-exit-kiosk",
+    "allow-kiosk-info",
+    "allow-kiosk-log"
+  ]
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Merged into the app bundle's Info.plist by tauri-build, and embedded into the dev
+       binary so the camera prompt also works under `tauri dev`. The microphone is not used. -->
+  <key>NSCameraUsageDescription</key>
+  <string>Scaler Kiosk uses your camera for identity verification and exam proctoring.</string>
+</dict>
+</plist>

@@ -1,0 +1,11 @@
+# Node
+node_modules/
+
+# Rust / Tauri build output
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log

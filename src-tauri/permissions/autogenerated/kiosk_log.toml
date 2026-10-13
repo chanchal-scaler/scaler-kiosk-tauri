@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kiosk-log"
+description = "Enables the kiosk_log command without any pre-configured scope."
+commands.allow = ["kiosk_log"]
+
+[[permission]]
+identifier = "deny-kiosk-log"
+description = "Denies the kiosk_log command without any pre-configured scope."
+commands.deny = ["kiosk_log"]
