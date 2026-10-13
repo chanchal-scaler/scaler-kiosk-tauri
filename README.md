@@ -334,3 +334,6 @@ should be signed too, or SmartScreen will warn.
 * Windows OS-level lockdown (Assigned Access) and a Linux kiosk session.
 * `getDisplayMedia()` on macOS builds older than 14.6 (private WebKit delegate).
 * Auto-update (`tauri-plugin-updater`) and crash reporting.
+
+
+https://docs.google.com/document/d/12hMVrYJUUogAWjbImk1w8vbCl_5cCe494kV8Sb9GFUs/edit?tab=t.0
