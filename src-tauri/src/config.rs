@@ -27,6 +27,11 @@ pub const DEFAULT_ALLOWED_HOSTS: &[&str] = &[
 /// Hidden key combination that quits the kiosk (parsed by tauri-plugin-global-shortcut).
 pub const DEFAULT_EXIT_SHORTCUT: &str = "Control+Alt+Shift+Q";
 
+/// Programs killed when kiosk mode starts (see `kill_blocked_apps` in `kiosk.rs`). Matched
+/// case-insensitively against the executable name, so `claude` covers the Claude desktop
+/// app (`Claude`, `Claude.exe`) and the Claude Code CLI (`claude`, `node …/claude`).
+pub const DEFAULT_BLOCKED_APPS: &[&str] = &["claude"];
+
 /// Token appended to the User-Agent so scaler.com can recognise the kiosk server-side.
 pub const USER_AGENT_TOKEN: &str = "ScalerKiosk";
 
@@ -55,6 +60,9 @@ pub struct Config {
     pub cover_secondary_displays: bool,
     /// `KIOSK_EXIT_BUTTON` – show the small "Exit" button in the top-right corner.
     pub exit_button: bool,
+    /// `KIOSK_BLOCKED_APPS` – comma-separated program names killed at start-up (kiosk mode
+    /// only); empty disables it.
+    pub blocked_apps: Vec<String>,
     /// Origin of Tauri's dev server under `tauri dev` (see `allow_dev_server`).
     pub dev_server: Option<Url>,
 }
@@ -109,6 +117,14 @@ impl Config {
             preflight_screen: env_flag("KIOSK_PREFLIGHT_SCREEN", kiosk),
             cover_secondary_displays: env_flag("KIOSK_COVER_DISPLAYS", kiosk),
             exit_button: env_flag("KIOSK_EXIT_BUTTON", true),
+            blocked_apps: env::var("KIOSK_BLOCKED_APPS")
+                .map(|raw| {
+                    raw.split(',')
+                        .map(|name| name.trim().to_string())
+                        .filter(|name| !name.is_empty())
+                        .collect()
+                })
+                .unwrap_or_else(|_| DEFAULT_BLOCKED_APPS.iter().map(|name| name.to_string()).collect()),
             dev_server: None,
         }
     }
@@ -241,6 +257,7 @@ mod tests {
             preflight_screen: true,
             cover_secondary_displays: true,
             exit_button: true,
+            blocked_apps: Vec::new(),
             dev_server: None,
         }
     }

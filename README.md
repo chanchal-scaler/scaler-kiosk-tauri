@@ -58,10 +58,11 @@ cp /path/to/scaler-logo.png app-icon.png && npm run icons
 | `scaler-kiosk://` deep links open the kiosk directly on a test page (see below) | `src-tauri/src/deeplink.rs` |
 | Context menu and zoom shortcuts disabled | `scripts/kiosk.js`, `kiosk.rs` |
 | Nothing closes the kiosk without an "Exit kiosk?" confirmation (see [Quitting](#quitting)), except a page calling `exit_kiosk` after the exam | `src-tauri/src/lib.rs`, `kiosk.rs` |
+| Programs in `KIOSK_BLOCKED_APPS` (default: Claude desktop app and Claude Code CLI) are killed once at start-up (`pkill` on macOS/Linux, `taskkill` on Windows) | `kill_blocked_apps` in `kiosk.rs` |
 
 Lockdown is deliberately *not* perfect: trackpad gestures for Mission Control, hot corners,
-and the power button are OS features outside the app. Killing background apps (as
-discussed for the SEB replacement) is not part of this scaffold.
+and the power button are OS features outside the app. Blocked apps are only killed at
+start-up, so one relaunched during the exam keeps running.
 
 ## Quitting
 
@@ -211,6 +212,7 @@ bake production values into `config.rs`).
 | `ALLOWED_HOSTS` | – | extra comma-separated hosts (subdomains included); `*` disables the allowlist |
 | `EXIT_SHORTCUT` | `Control+Alt+Shift+Q` | system-wide backup quit combination (asks for confirmation), works even if the page hangs; empty disables it |
 | `KIOSK_EXIT_BUTTON` | `1` | show the Exit button in the top-right corner (kiosk mode only) |
+| `KIOSK_BLOCKED_APPS` | `claude` | comma-separated program names killed at start-up, matched case-insensitively (kiosk mode only); empty disables it |
 | `KIOSK_REFOCUS` | `0` | pull focus back 1.5 s after another window steals it (can fight with OS permission dialogs and the share picker, hence off) |
 | `KIOSK_INCOGNITO` | `0` | ephemeral cookies/storage |
 | `KIOSK_PREFLIGHT_MEDIA` | `1` | launcher asks for the camera before opening scaler.com |

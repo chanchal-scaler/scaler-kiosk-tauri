@@ -39,6 +39,7 @@ pub fn setup(app: &AppHandle) -> Result<(), Box<dyn Error>> {
     // screen that already has no menu bar or Dock.
     if config.kiosk {
         platform::enter_kiosk();
+        kill_blocked_apps(config.blocked_apps.clone());
     }
 
     // A deep link the app was launched with replaces the configured start page.
@@ -243,6 +244,46 @@ fn monitor_rect(monitor: &Monitor) -> ((f64, f64), (f64, f64)) {
     ((position.x, position.y), (size.width, size.height))
 }
 
+/// Kills the programs in `KIOSK_BLOCKED_APPS` (Claude by default) once, on a background
+/// thread so start-up is not held up by the OS tools.
+fn kill_blocked_apps(names: Vec<String>) {
+    if names.is_empty() {
+        return;
+    }
+    std::thread::spawn(move || {
+        for name in &names {
+            match kill_command(name).output() {
+                // pkill exits 1 / taskkill exits 128 when nothing matched.
+                Ok(output) if output.status.success() => log::info!("killed blocked app {name:?}"),
+                Ok(_) => log::info!("blocked app {name:?} is not running"),
+                Err(err) => log::error!("could not kill blocked app {name:?}: {err}"),
+            }
+        }
+    });
+}
+
+/// macOS/Linux: matches the executable name anywhere in the command line, case-insensitively,
+/// so `claude` catches `/Applications/Claude.app/Contents/MacOS/Claude` and its helpers,
+/// `~/.local/bin/claude` and `node /usr/local/bin/claude`, but not paths like `~/.claude/…`.
+#[cfg(unix)]
+fn kill_command(name: &str) -> std::process::Command {
+    let mut command = std::process::Command::new("pkill");
+    command.args(["-9", "-i", "-f", &format!("(^|/){name}( |$)")]);
+    command
+}
+
+/// Windows: kills `<name>.exe` and its child processes, without flashing a console window.
+#[cfg(windows)]
+fn kill_command(name: &str) -> std::process::Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut command = std::process::Command::new("taskkill");
+    command
+        .args(["/F", "/T", "/IM", &format!("{name}.exe")])
+        .creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
 fn register_exit_shortcut(app: &AppHandle, config: &Config) -> Result<(), Box<dyn Error>> {
     let combo = config.exit_shortcut.trim();
     if combo.is_empty() {
@@ -269,22 +310,61 @@ fn register_exit_shortcut(app: &AppHandle, config: &Config) -> Result<(), Box<dy
 pub fn confirm_exit(app: &AppHandle) {
     let state = app.state::<KioskState>();
     if state.confirming_exit.swap(true, Ordering::SeqCst) {
-        return; // a dialog is already open
+        log::info!("exit confirmation already open");
+        return;
     }
-    let handle = app.clone();
-    app.dialog()
+    log::info!("showing exit confirmation");
+
+    // Windows/Linux: the kiosk windows are always-on-top, and an ownerless message box opens
+    // *behind* them, so the question was invisible (and, with `confirming_exit` stuck, every
+    // later Exit click looked dead). Give the box the kiosk window as its owner (owned windows
+    // always sit above their owner) and lift always-on-top until it is answered. macOS layers
+    // its alert above the kiosk window already, and a parent would turn it into a sheet.
+    #[cfg_attr(target_os = "macos", allow(unused_mut))]
+    let mut dialog = app
+        .dialog()
         .message("Quit Scaler Kiosk? Any exam in progress will be interrupted.")
         .title("Exit kiosk")
         .kind(MessageDialogKind::Warning)
-        .buttons(MessageDialogButtons::OkCancelCustom("Exit kiosk".into(), "Cancel".into()))
-        .show(move |confirmed| {
-            handle.state::<KioskState>().confirming_exit.store(false, Ordering::SeqCst);
-            if confirmed {
-                exit(&handle);
-            } else {
-                log::info!("exit cancelled");
-            }
-        });
+        .buttons(MessageDialogButtons::OkCancelCustom("Exit kiosk".into(), "Cancel".into()));
+    #[cfg(not(target_os = "macos"))]
+    {
+        set_kiosk_windows_on_top(app, false);
+        if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+            dialog = dialog.parent(&window);
+        }
+    }
+
+    let handle = app.clone();
+    dialog.show(move |confirmed| {
+        handle.state::<KioskState>().confirming_exit.store(false, Ordering::SeqCst);
+        if confirmed {
+            exit(&handle);
+        } else {
+            log::info!("exit cancelled");
+            #[cfg(not(target_os = "macos"))]
+            set_kiosk_windows_on_top(&handle, true);
+        }
+    });
+}
+
+/// Toggles always-on-top for the exam window and the secondary-display covers (kiosk mode
+/// only; in a normal dev window it was never on).
+#[cfg(not(target_os = "macos"))]
+fn set_kiosk_windows_on_top(app: &AppHandle, on_top: bool) {
+    if !app.state::<KioskState>().config.kiosk {
+        return;
+    }
+    for (label, window) in app.webview_windows() {
+        if let Err(err) = window.set_always_on_top(on_top) {
+            log::warn!("could not set always-on-top={on_top} on '{label}': {err}");
+        }
+    }
+    if on_top {
+        if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+            let _ = window.set_focus();
+        }
+    }
 }
 
 /// Unlocks the kiosk and quits. Safe to call from any thread.
