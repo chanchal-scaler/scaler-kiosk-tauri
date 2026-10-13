@@ -103,6 +103,7 @@ pub fn run() {
         .manage(KioskState::new(config))
         .invoke_handler(tauri::generate_handler![
             commands::exit_kiosk,
+            commands::request_exit,
             commands::kiosk_info,
             commands::kiosk_log
         ])
@@ -113,11 +114,12 @@ pub fn run() {
         .on_window_event(|window, event| {
             let state = window.state::<KioskState>();
             match event {
-                // The close button is hidden in kiosk mode, but Cmd+W / Alt+F4 style requests
-                // still arrive here: swallow them while locked.
+                // The close button is hidden in kiosk mode, but Alt+F4 (Windows/Linux) still
+                // arrives here: keep the window and ask the same "Exit kiosk?" question instead.
                 WindowEvent::CloseRequested { api, .. } if state.is_locked() => {
-                    log::warn!("close requested for '{}' while locked; ignoring", window.label());
+                    log::info!("close requested for '{}'; asking to exit", window.label());
                     api.prevent_close();
+                    kiosk::confirm_exit(window.app_handle());
                 }
                 WindowEvent::Focused(false) if state.is_locked() && state.config.refocus => {
                     kiosk::regain_focus(window);

@@ -1,0 +1,99 @@
+# Builds the Windows and Linux installers on GitHub-hosted runners.
+# macOS is built locally (`npm run build:mac`), so it is not part of this workflow.
+#
+# - Every push to main, every pull request and manual runs ("Run workflow" button):
+#   installers are uploaded as workflow artifacts (Actions run page → Artifacts).
+# - Pushing a tag like v0.1.0 additionally creates a *draft* GitHub release with the
+#   installers attached; add the macOS .dmg to it by hand and publish.
+name: Build Windows & Linux
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the build still running for the old one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            bundles: msi,nsis
+          # 22.04 rather than latest: an older glibc means the .deb/.AppImage also run on
+          # older distros. Its WebKitGTK 2.4x is new enough for camera + screen share.
+          - name: linux
+            os: ubuntu-22.04
+            bundles: deb,rpm,appimage
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Caches compiled dependencies; cuts a ~10 min cold build to a few minutes.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install Linux build dependencies
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev patchelf
+
+      - run: npm ci
+
+      - name: Build installers
+        run: npx tauri build --bundles ${{ matrix.bundles }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scaler-kiosk-${{ matrix.name }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
+
+  release:
+    name: Draft release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create draft release with the installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la dist
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" --draft --generate-notes \
+            --title "Scaler Kiosk $GITHUB_REF_NAME"

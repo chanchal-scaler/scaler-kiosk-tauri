@@ -53,6 +53,8 @@ pub struct Config {
     pub preflight_screen: bool,
     /// `KIOSK_COVER_DISPLAYS` – black out every display except the primary one.
     pub cover_secondary_displays: bool,
+    /// `KIOSK_EXIT_BUTTON` – show the small "Exit" button in the top-right corner.
+    pub exit_button: bool,
     /// Origin of Tauri's dev server under `tauri dev` (see `allow_dev_server`).
     pub dev_server: Option<Url>,
 }
@@ -106,6 +108,7 @@ impl Config {
             preflight_media: env_flag("KIOSK_PREFLIGHT_MEDIA", true),
             preflight_screen: env_flag("KIOSK_PREFLIGHT_SCREEN", kiosk),
             cover_secondary_displays: env_flag("KIOSK_COVER_DISPLAYS", kiosk),
+            exit_button: env_flag("KIOSK_EXIT_BUTTON", true),
             dev_server: None,
         }
     }
@@ -237,6 +240,7 @@ mod tests {
             preflight_media: true,
             preflight_screen: true,
             cover_secondary_displays: true,
+            exit_button: true,
             dev_server: None,
         }
     }

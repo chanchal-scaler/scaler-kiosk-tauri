@@ -5,16 +5,27 @@ use std::error::Error;
 
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSApplicationPresentationOptions};
-use tauri::menu::{AboutMetadata, MenuBuilder, SubmenuBuilder};
+use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::AppHandle;
 
-/// Replaces Tauri's default menu. There is deliberately no Quit, Hide, Minimize or Close
-/// item, so Cmd+Q / Cmd+H / Cmd+M / Cmd+W do nothing; the Edit items stay so that
+use crate::kiosk;
+
+/// Menu id of the "Quit Scaler Kiosk" item.
+const QUIT_ITEM: &str = "kiosk-quit";
+
+/// Replaces Tauri's default menu. Cmd+Q is a custom "Quit" item that asks for confirmation
+/// (the stock Quit item would terminate straight away); there is deliberately no Hide,
+/// Minimize or Close item, so Cmd+H / Cmd+M / Cmd+W do nothing. The Edit items stay so that
 /// Cmd+C / Cmd+V / Cmd+A keep working inside the webview (key equivalents on macOS are
 /// routed through the menu, even while the menu bar is hidden).
 pub fn install_menu(app: &AppHandle) -> Result<(), Box<dyn Error>> {
+    let quit = MenuItemBuilder::with_id(QUIT_ITEM, "Quit Scaler Kiosk")
+        .accelerator("CmdOrCtrl+Q")
+        .build(app)?;
     let app_menu = SubmenuBuilder::new(app, "Scaler Kiosk")
         .about(Some(AboutMetadata::default()))
+        .separator()
+        .item(&quit)
         .build()?;
     let edit_menu = SubmenuBuilder::new(app, "Edit")
         .undo()
@@ -27,6 +38,12 @@ pub fn install_menu(app: &AppHandle) -> Result<(), Box<dyn Error>> {
         .build()?;
     let menu = MenuBuilder::new(app).items(&[&app_menu, &edit_menu]).build()?;
     app.set_menu(menu)?;
+    app.on_menu_event(|app, event| {
+        if event.id() == QUIT_ITEM {
+            log::info!("Cmd+Q pressed");
+            kiosk::confirm_exit(app);
+        }
+    });
     Ok(())
 }
 

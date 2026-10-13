@@ -9,9 +9,12 @@
       "https://*.scaler.com/*"
     ]
   },
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "allow-exit-kiosk",
+    "allow-request-exit",
     "allow-kiosk-info",
     "allow-kiosk-log"
   ]

@@ -25,7 +25,7 @@ npm install
 # Normal window, no lockdown — the comfortable dev loop
 KIOSK=0 npm run dev
 
-# Full kiosk mode (what candidates get). Leave with Control+Alt+Shift+Q and confirm.
+# Full kiosk mode (what candidates get). Leave with the Exit button (top-right) or Cmd/Ctrl+Q.
 npm run dev
 
 # Point it at a local Rails server instead of production
@@ -50,18 +50,36 @@ cp /path/to/scaler-logo.png app-icon.png && npm run icons
 | --- | --- |
 | Borderless window the size of the primary display, always on top, visible on every Space, not resizable/minimizable/closable | `src-tauri/src/kiosk.rs` |
 | macOS: Dock and menu bar hidden; Cmd+Tab, force quit (Cmd+Opt+Esc), Hide, log out / shut down disabled (`NSApplication.presentationOptions`, the mechanism Apple's kiosk guidance and SEB use) | `src-tauri/src/platform/macos.rs` |
-| macOS: menu without Quit/Hide/Minimize/Close (so Cmd+Q, Cmd+H, Cmd+M, Cmd+W do nothing) but with the Edit items so copy/paste keeps working | `src-tauri/src/platform/macos.rs` |
+| macOS: menu without Hide/Minimize/Close (so Cmd+H, Cmd+M, Cmd+W do nothing), a Quit item that asks first, and the Edit items so copy/paste keeps working | `src-tauri/src/platform/macos.rs` |
 | Windows/Linux: borderless fullscreen, always on top, hidden from the taskbar | `src-tauri/src/kiosk.rs` |
 | Every other display is covered by a black window | `kiosk.rs` + `dist/cover.html` |
 | The main window may only show `scaler.com`, `interviewbit.com` and Google sign-in pages (including country domains like `accounts.google.co.in`) plus the start URL's host; if it lands anywhere else it is sent back to the last allowed page. Iframes (Cloudflare Turnstile, YouTube embeds) are not restricted, only `file:` and custom schemes are blocked everywhere | `src-tauri/src/config.rs`, `guard_page_load` in `kiosk.rs` |
 | `window.open()` / `target="_blank"` never open a second window — the URL loads in the kiosk window if allowed | `kiosk.rs` + `src-tauri/scripts/kiosk.js` |
 | `scaler-kiosk://` deep links open the kiosk directly on a test page (see below) | `src-tauri/src/deeplink.rs` |
 | Context menu and zoom shortcuts disabled | `scripts/kiosk.js`, `kiosk.rs` |
-| Close/exit requests are swallowed until the kiosk is unlocked — by the exit shortcut (with a confirmation dialog) or by a page calling `exit_kiosk` | `src-tauri/src/lib.rs`, `kiosk.rs` |
+| Nothing closes the kiosk without an "Exit kiosk?" confirmation (see [Quitting](#quitting)), except a page calling `exit_kiosk` after the exam | `src-tauri/src/lib.rs`, `kiosk.rs` |
 
 Lockdown is deliberately *not* perfect: trackpad gestures for Mission Control, hot corners,
 and the power button are OS features outside the app. Killing background apps (as
 discussed for the SEB replacement) is not part of this scaffold.
+
+## Quitting
+
+In kiosk mode every one of these shows the same native **"Exit kiosk?"** dialog (Exit kiosk /
+Cancel); nothing quits without confirming:
+
+| Way out | Where it works |
+| --- | --- |
+| **Exit button**: a small pill in the top-right corner, half-transparent until hovered | every page (turn off with `KIOSK_EXIT_BUTTON=0`) |
+| **Cmd+Q** | macOS (a menu item, so it works even though the menu bar is hidden) |
+| **Ctrl+Q** | Windows, Linux |
+| **Alt+F4** | Windows, Linux |
+| **Control+Alt+Shift+Q** | everywhere, system-wide, even if the page is frozen (not under Linux Wayland) |
+
+Pages can also quit without a dialog by calling `window.scalerKiosk.exit()`, e.g. once the
+exam is submitted. The button is injected into the page in a closed shadow root attached to
+`<html>`, so site CSS can't restyle it and single-page-app re-renders can't remove it. If it
+covers something on the exam pages, change `top`/`right` in `src-tauri/scripts/kiosk.js`.
 
 ## Camera and screen share (no microphone)
 
@@ -95,11 +113,35 @@ discussed for the SEB replacement) is not part of this scaffold.
 
 ## Windows and Linux
 
-Tauri builds natively on each OS: clone or copy the project onto a Windows or Linux machine
-and build there (cross-compiling from macOS is not supported for the installers). For
-release builds of all three platforms from one place, use CI —
-[`tauri-apps/tauri-action`](https://github.com/tauri-apps/tauri-action) on GitHub Actions
-runs `tauri build` on macOS, Windows and Ubuntu runners.
+Tauri builds natively on each OS. macOS is built on your Mac; Windows and Linux are built
+by GitHub Actions (`.github/workflows/build.yml`), or by hand on those OSes as described below.
+
+### Releases: macOS locally, Windows + Linux on GitHub Actions
+
+```bash
+# macOS (Apple Silicon + Intel in one app), on your Mac
+npm run build:mac
+# → src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+
+# Windows + Linux: push to GitHub
+git push                          # main / PRs: installers uploaded as run artifacts
+git tag v0.1.0 && git push --tags # tag: also creates a *draft* release with them attached
+```
+
+* **Every push to `main`, every PR and manual runs** (Actions → "Build Windows & Linux" →
+  Run workflow) build the Windows `.msi` + `-setup.exe` (on `windows-latest`) and the Linux
+  `.deb`, `.rpm` and `.AppImage` (on `ubuntu-22.04`, so they also run on older distros).
+  Download them from the run page under **Artifacts** (kept 14 days).
+* **A `v*` tag** also creates a draft GitHub release with those installers attached. Drag
+  the macOS `.dmg` from `npm run build:mac` into the same draft, then publish it. Keep the
+  tag in step with `version` in `tauri.conf.json`/`package.json`, which is what ends up in
+  the file names.
+* Cost on a private repo: roughly 10 min Windows (billed at ~1.7× Linux) plus 8 min Linux
+  per run once the Rust cache is warm, i.e. about 25 of the 2,000 free monthly minutes. The
+  first run, with a cold cache, takes longer.
+* Code signing is not wired in. Windows: add the certificate as a repo secret and set
+  `bundle.windows.certificateThumbprint` / `signCommand` (see Tauri's Windows signing guide)
+  before handing installers to candidates, or SmartScreen will warn.
 
 ### Windows 10/11
 
@@ -113,7 +155,7 @@ runs `tauri build` on macOS, Windows and Ubuntu runners.
 cd scaler-kiosk-tauri
 npm install
 $env:KIOSK="0"; npm run dev        # windowed (PowerShell; in cmd: set KIOSK=0 && npm run dev)
-Remove-Item Env:KIOSK; npm run dev # full kiosk; exit with Ctrl+Alt+Shift+Q
+Remove-Item Env:KIOSK; npm run dev # full kiosk; exit with the Exit button or Ctrl+Q
 npm run build                      # src-tauri\target\release\bundle\msi\*.msi and nsis\*-setup.exe
 ```
 
@@ -150,9 +192,8 @@ Linux specifics:
   (`configure_webview` in `platform/other.rs`), so the camera works.
 * Screen share goes through the desktop's xdg-desktop-portal + PipeWire picker (standard on
   current GNOME/KDE); it needs a recent WebKitGTK (Ubuntu 24.04's is fine).
-* The global exit shortcut only works in an **X11** session; under Wayland it fails to
-  register (logged) and the only way out is a page calling `window.scalerKiosk.exit()` —
-  test with `KIOSK=0` there, or log in with "Ubuntu on Xorg".
+* The global backup shortcut (Ctrl+Alt+Shift+Q) only works in an **X11** session; under
+  Wayland it fails to register (logged). The Exit button, Ctrl+Q and Alt+F4 work either way.
 * No app-level lockdown beyond fullscreen + always-on-top; a real Linux kiosk is a
   dedicated session (e.g. GNOME Kiosk / a cage compositor) that only launches this app.
 * Logs: `~/.local/share/com.scaler.kiosk.tauri/logs/kiosk.log`.
@@ -168,7 +209,8 @@ bake production values into `config.rs`).
 | `KIOSK` | `1` | `0` runs a normal 1280×800 window with no lockdown |
 | `APP_URL` | `https://www.scaler.com/` | first page to open; its host is auto-allowlisted |
 | `ALLOWED_HOSTS` | – | extra comma-separated hosts (subdomains included); `*` disables the allowlist |
-| `EXIT_SHORTCUT` | `Control+Alt+Shift+Q` | operator quit combination (asks for confirmation); empty disables it |
+| `EXIT_SHORTCUT` | `Control+Alt+Shift+Q` | system-wide backup quit combination (asks for confirmation), works even if the page hangs; empty disables it |
+| `KIOSK_EXIT_BUTTON` | `1` | show the Exit button in the top-right corner (kiosk mode only) |
 | `KIOSK_REFOCUS` | `0` | pull focus back 1.5 s after another window steals it (can fight with OS permission dialogs and the share picker, hence off) |
 | `KIOSK_INCOGNITO` | `0` | ephemeral cookies/storage |
 | `KIOSK_PREFLIGHT_MEDIA` | `1` | launcher asks for the camera before opening scaler.com |
@@ -196,14 +238,17 @@ page loads are logged.
   if (window.scalerKiosk) {
     const info = await window.scalerKiosk.info(); // { name, version, platform, kiosk, startUrl, allowedHosts }
     window.scalerKiosk.log('info', 'exam started');
-    // after the exam is submitted:
+    // after the exam is submitted (quits straight away, no confirmation):
     await window.scalerKiosk.exit();
+    // or offer your own "Leave" button that shows the native confirmation:
+    window.scalerKiosk.requestExit();
   }
   ```
 
-  Only pages served from `https://scaler.com` / `https://*.scaler.com` may call these three
-  commands (`src-tauri/capabilities/scaler.json`); nothing else from the Tauri API is exposed
-  to remote content. Add hosts there if the exam pages live elsewhere.
+  `info`, `log` and `exit` work only on pages served from `https://scaler.com` /
+  `https://*.scaler.com` (`src-tauri/capabilities/scaler.json`). `requestExit` works on every
+  page (`exit-anywhere.json`), since it only asks the user. Nothing else from the Tauri API
+  is exposed to remote content. Add hosts to `scaler.json` if the exam pages live elsewhere.
 
 ## Deep links (open the kiosk on a specific test)
 
@@ -227,8 +272,11 @@ scaler-kiosk://open?url=https%3A%2F%2Fwww.scaler.com%2Ftest%2Fabc123
 * **Testing on macOS needs a bundled app** — the scheme is registered through the `.app`'s
   Info.plist, so `tauri dev` can't receive links. Run `npm run build`, open
   `src-tauri/target/release/bundle/macos/Scaler Kiosk.app` once (that registers it with
-  Launch Services), then `open "scaler-kiosk://www.scaler.com/test/abc123"`. On
-  Windows/Linux the dev binary registers the scheme itself on first run. In dev on any OS you
+  Launch Services), then `open "scaler-kiosk://www.scaler.com/test/abc123"`. On Windows
+  the installer registers the scheme (the dev binary registers itself on first run). On
+  Linux the app registers a per-user handler every time it starts, because the packaged
+  `.desktop` file doesn't pass the URL on (no `%u`); after one launch,
+  `xdg-open "scaler-kiosk://www.scaler.com/test/abc123"` works. In dev on any OS you
   can also pass a page URL as an argument: `npm run dev -- -- https://www.scaler.com/test/abc123`.
 * Universal links (plain `https://scaler.com/...` URLs opening the app) are not set up: on
   macOS they need an Apple Developer team with the associated-domains entitlement plus an
@@ -239,7 +287,8 @@ scaler-kiosk://open?url=https%3A%2F%2Fwww.scaler.com%2Ftest%2Fabc123
 
 ```
 scaler-kiosk-tauri/
-├── package.json                 # @tauri-apps/cli only; `npm run dev|build|icons`
+├── .github/workflows/build.yml  # CI: Windows + Linux installers, draft release on v* tags
+├── package.json                 # @tauri-apps/cli only; `npm run dev|build|build:mac|icons`
 ├── app-icon.png                 # placeholder source icon — replace, then `npm run icons`
 ├── dist/                        # bundled pages served as tauri://localhost
 │   ├── index.html, launcher.js  #   launcher: connectivity wait, media preflight, redirect
@@ -251,7 +300,8 @@ scaler-kiosk-tauri/
     ├── Entitlements.plist       # hardened-runtime camera entitlement
     ├── capabilities/
     │   ├── launcher.json        #   local launcher page: core API + kiosk commands
-    │   └── scaler.json          #   remote scaler.com pages: kiosk commands only
+    │   ├── scaler.json          #   remote scaler.com pages: kiosk commands only
+    │   └── exit-anywhere.json   #   any page: request_exit (Exit button / Ctrl+Q)
     ├── permissions/autogenerated/  # generated by build.rs from the command list
     ├── scripts/kiosk.js         # init script injected into every page (window.scalerKiosk)
     ├── icons/                   # generated icon set

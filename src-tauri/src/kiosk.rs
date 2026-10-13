@@ -76,6 +76,7 @@ fn build_main_window(
         "kiosk": config.kiosk,
         "startUrl": start_url.as_str(),
         "preflightMedia": config.preflight_media,
+        "exitButton": config.kiosk && config.exit_button,
     });
     let init_script = INIT_SCRIPT.replace("__KIOSK_CONFIG__", &page_config.to_string());
 

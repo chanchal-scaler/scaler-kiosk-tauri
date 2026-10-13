@@ -41,6 +41,14 @@ pub fn exit_kiosk(app: AppHandle) {
     kiosk::exit(&app);
 }
 
+/// `window.scalerKiosk.requestExit()` – the Exit button and Ctrl+Q: shows the native
+/// "Exit kiosk?" confirmation and quits only if the user confirms.
+#[tauri::command]
+pub fn request_exit(app: AppHandle) {
+    log::info!("exit requested by page (Exit button / Ctrl+Q)");
+    kiosk::confirm_exit(&app);
+}
+
 /// `window.scalerKiosk.log(level, message)` – lets pages write to the kiosk log file
 /// (useful for support: "send us the kiosk log").
 #[tauri::command]

@@ -9,9 +9,9 @@
 //! The target must pass the navigation allowlist (`Config::is_navigation_allowed`); anything
 //! else is ignored and logged, so a link cannot push the kiosk to an arbitrary site.
 //!
-//! The scheme itself is registered by the bundler (`plugins.deep-link` in tauri.conf.json):
-//! on macOS that only happens for a bundled `.app`, on Windows/Linux `register_all` also
-//! wires it up for the dev binary.
+//! The scheme is declared in tauri.conf.json (`plugins.deep-link`). macOS registers it
+//! through the bundled `.app`, Windows through the installer; on Linux the app registers a
+//! per-user handler itself at start-up (see `install`).
 
 use tauri::{AppHandle, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -72,11 +72,14 @@ pub fn launch_target(app: &AppHandle, state: &KioskState) -> Option<Url> {
 
 /// Listens for deep links delivered while the app is running (or at launch on macOS).
 pub fn install(app: &AppHandle) {
+    // Linux: always (re)register at start-up. The bundler's .desktop file declares the
+    // scheme but its Exec line has no %u, so the link would never reach the app; this writes
+    // a per-user handler with `"<exe>" %u` (the AppImage's real path when run as one).
+    // Windows: the installer registers the scheme; only point it at the dev binary in dev.
     #[cfg(any(windows, target_os = "linux"))]
-    if cfg!(debug_assertions) {
-        // Point the scheme at the dev binary so links can be tested without bundling.
+    if cfg!(target_os = "linux") || cfg!(debug_assertions) {
         if let Err(err) = app.deep_link().register_all() {
-            log::warn!("could not register the {SCHEME}:// scheme for development: {err}");
+            log::warn!("could not register the {SCHEME}:// scheme: {err}");
         }
     }
 

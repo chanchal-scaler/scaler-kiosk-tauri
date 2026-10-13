@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "exit-anywhere",
+  "description": "The Exit button and Ctrl+Q must work on every page the kiosk can show (Google sign-in, interviewbit.com, a local Rails server), not just scaler.com. request_exit only opens the native 'Exit kiosk?' confirmation, so it is safe to allow everywhere; the immediate exit_kiosk stays limited to scaler.com.",
+  "local": false,
+  "remote": {
+    "urls": [
+      "https://*:*",
+      "http://*:*"
+    ]
+  },
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "allow-request-exit"
+  ]
+}
